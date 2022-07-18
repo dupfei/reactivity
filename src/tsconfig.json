@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.base.json",
+  "include": ["./**/*"],
+  "compilerOptions": {
+    "removeComments": true,
+    "declaration": true,
+    "declarationDir": "../types",
+    "lib": ["ES5", "DOM"],
+    "target": "ES5"
+  }
+}

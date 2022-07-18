@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "strict": true,
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "types": [],
+    "importHelpers": true,
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "esModuleInterop": true,
+    "useDefineForClassFields": false
+  }
+}
