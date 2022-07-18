@@ -1,7 +1,7 @@
 import { recordEffectScope } from './effectScope'
 import { createSet, InternalSet } from './utils/internalSet'
 
-type Dep = InternalSet<ReactiveEffect> & {
+export type Dep = InternalSet<ReactiveEffect> & {
   w: number
   n: number
 }
@@ -56,6 +56,7 @@ let activeEffect: ReactiveEffect | undefined
 export class ReactiveEffect<T = unknown> {
   active = true
   deps: Dep[] = []
+  computed?: boolean
   private deferStop?: boolean
   onStop?: () => void
 
@@ -143,9 +144,20 @@ export function track(dep: Dep): void {
 export function trigger(dep: Dep): void {
   // 确定要触发的 effects，触发过程中新增的 effects 本次不应该触发
   const effects: ReactiveEffect[] = []
+  const computedEffects: ReactiveEffect[] = []
   dep.forEach((effect) => {
-    effects.push(effect)
+    if (effect.computed) {
+      computedEffects.push(effect)
+    } else {
+      effects.push(effect)
+    }
   })
+  // 优先触发 computedEffect，保证其它 effect 触发时 computed 值已经更新
+  triggerEffects(computedEffects)
+  triggerEffects(effects)
+}
+
+function triggerEffects(effects: ReactiveEffect[]): void {
   for (let i = 0; i < effects.length; i++) {
     const effect = effects[i]
     if (effect !== activeEffect) {

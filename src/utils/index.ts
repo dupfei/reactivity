@@ -23,3 +23,12 @@ export function remove<T>(arr: T[], el: T): void {
     arr.splice(index, 1)
   }
 }
+
+export function def(obj: object, key: PropertyKey, value: unknown): void {
+  Object.defineProperty(obj, key, {
+    configurable: true,
+    enumerable: false,
+    value,
+    writable: true,
+  })
+}
