@@ -1,4 +1,4 @@
-import { isNative, NOOP } from './utils'
+import { isNative, NOOP } from './utils/index'
 
 const inBrowser = typeof window !== 'undefined'
 const UA = inBrowser && window.navigator.userAgent.toLowerCase()

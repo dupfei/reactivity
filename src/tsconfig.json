@@ -2,6 +2,7 @@
   "extends": "../tsconfig.base.json",
   "include": ["./**/*"],
   "compilerOptions": {
+    "moduleResolution": "Classic",
     "removeComments": true,
     "declaration": true,
     "declarationDir": "../types",

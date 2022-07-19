@@ -1,8 +1,13 @@
-import { Dep } from './effect'
-import { DEP_FLAG, REF_FLAG } from './flag'
+import { REF_FLAG } from './flag'
 
 export interface Ref<T = unknown> {
   value: T
-  [REF_FLAG]: true
-  [DEP_FLAG]: Dep
+}
+
+export function isRef<T>(value: Ref<T> | unknown): value is Ref<T> {
+  return !!(value && (value as any)[REF_FLAG] === true)
+}
+
+export function unref<T>(ref: T | Ref<T>): T {
+  return isRef(ref) ? ref.value : ref
 }

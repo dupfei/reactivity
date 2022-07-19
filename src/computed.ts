@@ -1,7 +1,7 @@
 import { createDep, ReactiveEffect, track, trigger } from './effect'
 import { DEP_FLAG, READONLY_FLAG, REF_FLAG } from './flag'
 import { Ref } from './ref'
-import { def, isFunction } from './utils'
+import { def, isFunction, NOOP } from './utils/index'
 
 type ComputedGetter<T> = () => T
 type ComputedSetter<T> = (newValue: T) => void
@@ -19,10 +19,6 @@ interface ReadonlyComputedRef<T> extends WritableComputedRef<T> {
 
 type ComputedRef<T = unknown> = ReadonlyComputedRef<T> | WritableComputedRef<T>
 
-const defaultSetter = () => {
-  console.warn('Write operation failed: computed value is readonly')
-}
-
 export function computed<T>(getter: ComputedGetter<T>): ReadonlyComputedRef<T>
 export function computed<T>(
   options: WritableComputedOptions<T>,
@@ -31,23 +27,29 @@ export function computed<T>(
   getterOrOptions: ComputedGetter<T> | WritableComputedOptions<T>,
 ): ComputedRef<T> {
   let getter: ComputedGetter<T>
-  let setter: ComputedSetter<T>
-  const onlyGetter = isFunction(getterOrOptions)
-  if (onlyGetter) {
+  let setter: ComputedSetter<T> | undefined
+  if (isFunction(getterOrOptions)) {
     getter = getterOrOptions
-    setter = defaultSetter
   } else {
     getter = getterOrOptions.get
-    setter = getterOrOptions.set || defaultSetter
+    setter = getterOrOptions.set
   }
-  return createComputedRef(getter, setter, onlyGetter)
+  return createComputedRef(getter, setter)
 }
 
 function createComputedRef<T>(
   getter: ComputedGetter<T>,
-  setter: ComputedSetter<T>,
-  isReadonly: boolean,
+  setter?: ComputedSetter<T>,
 ): ComputedRef<T> {
+  const isReadonly = !setter
+  if (isReadonly) {
+    setter = __DEV__
+      ? () => {
+          console.warn('computed值是只读的')
+        }
+      : NOOP
+  }
+
   let value: T
   let dirty = true
   const dep = createDep()
@@ -70,12 +72,14 @@ function createComputedRef<T>(
       return value
     },
     set value(newValue: T) {
-      setter(newValue)
+      setter!(newValue)
     },
   } as ComputedRef<T>
   def(computedRef, REF_FLAG, true)
   def(computedRef, DEP_FLAG, dep)
-  def(computedRef, READONLY_FLAG, isReadonly)
+  if (isReadonly) {
+    def(computedRef, READONLY_FLAG, true)
+  }
 
   return computedRef
 }

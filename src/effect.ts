@@ -51,7 +51,7 @@ function finalizeDepMarkers(effect: ReactiveEffect): void {
 
 type EffectScheduler = () => void
 
-let activeEffect: ReactiveEffect | undefined
+export let activeEffect: ReactiveEffect | undefined
 
 export class ReactiveEffect<T = unknown> {
   active = true
@@ -99,7 +99,7 @@ export class ReactiveEffect<T = unknown> {
   }
 
   stop(): void {
-    // run 过程中执行 stop，延迟到 run 结束后再执行
+    // run 过程中调用 stop，延迟到 run 结束后再执行
     if (activeEffect === this) {
       this.deferStop = true
     } else if (this.active) {
@@ -142,7 +142,7 @@ export function track(dep: Dep): void {
 }
 
 export function trigger(dep: Dep): void {
-  // 确定要触发的 effects，触发过程中新增的 effects 本次不应该触发
+  // 固定本次要触发的 effects，触发过程中新增的 effect 本次不触发
   const effects: ReactiveEffect[] = []
   const computedEffects: ReactiveEffect[] = []
   dep.forEach((effect) => {

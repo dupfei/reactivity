@@ -1,3 +1,6 @@
+export const OBSERVER_FLAG = '__observer__'
+export const SHALLOW_FLAG = '__shallow__'
+export const SKIP_FLAG = '__skip__'
 export const REF_FLAG = '__ref__'
 export const DEP_FLAG = '__dep__'
 export const READONLY_FLAG = '__readonly__'
