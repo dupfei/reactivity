@@ -148,7 +148,7 @@ function defineReactive(
           }
         }
       }
-      return val
+      return isRef(val) && !shallow ? val.value : val
     },
     set: function reactiveSetter(newValue) {
       if (nonWritable) return
@@ -158,6 +158,9 @@ function defineReactive(
       if (sameValue(newValue, val)) return
       if (setter) {
         setter.call(obj, newValue)
+      } else if (isRef(val) && !isRef(newValue)) {
+        val.value = newValue
+        return
       } else {
         val = newValue
       }
@@ -167,7 +170,7 @@ function defineReactive(
   })
 }
 
-function trackArray(arr: unknown[], seen?: InternalSet<unknown[]>) {
+export function trackArray(arr: unknown[], seen?: InternalSet<unknown[]>) {
   seen = seen || createSet()
   if (seen.has(arr)) return
   seen.add(arr)
