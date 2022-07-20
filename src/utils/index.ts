@@ -41,6 +41,9 @@ export function def(obj: object, key: PropertyKey, value: unknown): void {
   })
 }
 
+const sameValueZero = (x: unknown, y: unknown) =>
+  x === y || (x !== x && y !== y)
+
 export const sameValue: (x: unknown, y: unknown) => boolean = (() => {
   // @ts-ignore
   if (isNative(Object.is)) return Object.is
@@ -68,3 +71,23 @@ export const setPrototypeOf: (obj: object, proto: object) => void = (() => {
     }
   }
 })()
+
+export const includes: <T>(arr: T[], el: T, fromIndex?: number) => boolean =
+  (() => {
+    // @ts-ignore
+    if (isNative(Array.prototype.includes)) {
+      // @ts-ignore
+      const arrayIncludes = Array.prototype.includes
+      return (arr, el, fromIndex = 0) => arrayIncludes.call(arr, el, fromIndex)
+    }
+    return (arr, el, fromIndex = 0) => {
+      const len = arr.length
+      if (len < 1) return false
+      const n = fromIndex | 0
+      let k = Math.max(n >= 0 ? n : len + n, 0)
+      while (k < len) {
+        if (sameValueZero(el, arr[k++])) return true
+      }
+      return false
+    }
+  })()

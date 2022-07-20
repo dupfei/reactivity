@@ -49,7 +49,7 @@ function finalizeDepMarkers(effect: ReactiveEffect): void {
   }
 }
 
-type EffectScheduler = () => void
+export type EffectScheduler = () => void
 
 export let activeEffect: ReactiveEffect | undefined
 
