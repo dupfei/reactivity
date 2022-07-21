@@ -1,5 +1,6 @@
-import { activeEffect, createDep, track, trigger } from './effect'
+import { activeEffect, createDep, Dep, track, trigger } from './effect'
 import { OBSERVER_FLAG, SHALLOW_FLAG, SKIP_FLAG } from './flag'
+import { isReadonly } from './reactive'
 import { isRef } from './ref'
 import {
   def,
@@ -106,12 +107,12 @@ export class Observer {
   }
 }
 
-function defineReactive(
+export function defineReactive(
   obj: Record<PropertyKey, unknown>,
   key: keyof typeof obj,
   val: unknown,
   shallow: boolean,
-): void {
+): Dep | undefined {
   const descriptor = Object.getOwnPropertyDescriptor(obj, key)
   if (descriptor && !descriptor.configurable) return
 
@@ -158,7 +159,12 @@ function defineReactive(
       if (sameValue(newValue, val)) return
       if (setter) {
         setter.call(obj, newValue)
-      } else if (isRef(val) && !isRef(newValue)) {
+      } else if (
+        !shallow &&
+        !isReadonly(newValue) &&
+        isRef(val) &&
+        !isRef(newValue)
+      ) {
         val.value = newValue
         return
       } else {
@@ -168,6 +174,8 @@ function defineReactive(
       trigger(dep)
     },
   })
+
+  return dep
 }
 
 export function trackArray(arr: unknown[], seen?: InternalSet<unknown[]>) {
