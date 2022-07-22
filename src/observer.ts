@@ -1,6 +1,5 @@
 import { activeEffect, createDep, Dep, track, trigger } from './effect'
 import { OBSERVER_FLAG, SHALLOW_FLAG, SKIP_FLAG } from './flag'
-import { isReadonly } from './reactive'
 import { isRef } from './ref'
 import {
   def,
@@ -118,61 +117,66 @@ export function defineReactive(
 
   const getter = descriptor && descriptor.get
   const setter = descriptor && descriptor.set
-  const writable = !descriptor || descriptor.writable !== false
-  const nonWritable = (!setter && getter) || (!setter && !getter && !writable)
-  if (!getter && val === NO_INITIAL_VALUE) {
+  const isAccessorProperty = getter || setter
+  const nonWritable = isAccessorProperty
+    ? !setter
+    : !!descriptor && descriptor.writable === false
+
+  if (!isAccessorProperty && val === NO_INITIAL_VALUE) {
     val = obj[key]
   }
 
   const dep = createDep()
-  let needDeepObserve = !shallow
+  let shouldObserveChild = true
   let childOb: Observer | undefined
+
+  function reactiveGetter(): unknown {
+    const value = isAccessorProperty
+      ? getter
+        ? getter.call(obj)
+        : undefined
+      : val
+    // 如果是非浅层 observe，访问时对属性值进行深层 observe
+    // 存在 getter 时每次都要对返回值进行深层 observe
+    if (!shallow && (shouldObserveChild || getter)) {
+      shouldObserveChild = false
+      childOb = observe(value, false)
+    }
+    if (activeEffect) {
+      track(dep)
+      if (childOb) {
+        track(childOb.dep)
+        if (isArray(value)) {
+          trackArray(value)
+        }
+      }
+    }
+    return isRef(value) && !shallow ? value.value : value
+  }
+
+  function reactiveSetter(newValue: unknown): void {
+    // 每次修改都会触发原有的 setter
+    if (setter) {
+      setter.call(obj, newValue)
+    }
+    // 对于访问器属性，很难猜测 get 和 set 之间的联系，默认认为每次 set 的值改变后，get 的值也会改变
+    // 关于首次 set，很难找到合适的值进行比对，默认认为是全新的值
+    if (!sameValue(newValue, val)) {
+      if (!shallow && isRef(val) && !isRef(newValue)) {
+        val.value = newValue
+      } else {
+        val = newValue
+        shouldObserveChild = true
+        trigger(dep)
+      }
+    }
+  }
 
   Object.defineProperty(obj, key, {
     configurable: true,
     enumerable: true,
-    get: function reactiveGetter() {
-      if (getter) {
-        val = getter.call(obj)
-      }
-      // 访问时进行深层响应式
-      if (needDeepObserve) {
-        needDeepObserve = false
-        childOb = observe(val, false)
-      }
-      if (activeEffect) {
-        track(dep)
-        if (childOb) {
-          track(childOb.dep)
-          if (isArray(val)) {
-            trackArray(val)
-          }
-        }
-      }
-      return isRef(val) && !shallow ? val.value : val
-    },
-    set: function reactiveSetter(newValue) {
-      if (nonWritable) return
-      if (val === NO_INITIAL_VALUE) {
-        val = getter!.call(obj)
-      }
-      if (sameValue(newValue, val)) return
-      if (setter) {
-        setter.call(obj, newValue)
-      } else if (
-        !shallow &&
-        !isReadonly(newValue) &&
-        isRef(val) &&
-        !isRef(newValue)
-      ) {
-        val.value = newValue
-        return
-      } else {
-        val = newValue
-      }
-      needDeepObserve = !shallow
-      trigger(dep)
-    },
+    get: reactiveGetter,
+    set: nonWritable ? undefined : reactiveSetter,
   })
 
   return dep

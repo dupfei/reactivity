@@ -109,7 +109,6 @@ describe('observer', () => {
     expect(getCount).toBe(2)
 
     // 触发属性原有的 setter
-    // 因为属性已经被访问过，存储了属性的值，修改时不再触发属性原有的 getter 获取属性值
     getCount = 0
     obj.a = 10
     expect(val).toBe(10)
@@ -136,7 +135,7 @@ describe('observer', () => {
     expect(obj.a).toBe(1)
 
     // 不能被修改
-    obj.a = 100
+    expect(() => (obj.a = 100)).toThrowError()
     expect(obj.a).toBe(1)
   })
 
@@ -185,34 +184,8 @@ describe('observer', () => {
     expect(obj.a).toBe(1)
 
     // 不能被修改
-    obj.a = 100
+    expect(() => (obj.a = 100)).toThrowError()
     expect(obj.a).toBe(1)
-  })
-
-  test('延迟触发属性原有的 getter', () => {
-    const obj: any = {}
-    let getCount = 0
-    let val = 1
-    Object.defineProperty(obj, 'a', {
-      configurable: true,
-      enumerable: true,
-      get() {
-        getCount++
-        return val
-      },
-      set(newValue) {
-        val = newValue
-      },
-    })
-
-    observe(obj)
-    // 还未触发属性原有的 getter
-    expect(getCount).toBe(0)
-    // 第一次修改属性值时触发属性原有的 getter 获取属性值
-    obj.a = 10
-    expect(getCount).toBe(1)
-    obj.a = 11
-    expect(getCount).toBe(1)
   })
 
   test('数组', () => {
