@@ -1,7 +1,7 @@
-import { Dep, trigger } from './effect'
+import { createDep, Dep, track, trigger } from './effect'
 import { DEP_FLAG, REF_FLAG, SHALLOW_FLAG } from './flag'
 import { defineReactive } from './observer'
-import { def } from './utils/index'
+import { def, isArray } from './utils/index'
 
 export interface Ref<T = unknown> {
   value: T
@@ -45,4 +45,72 @@ export function triggerRef(ref: ShallowRef): void {
 
 export function unref<T>(ref: T | Ref<T>): T {
   return isRef(ref) ? ref.value : ref
+}
+
+type CustomRefFactory<T> = (
+  track: () => void,
+  trigger: () => void,
+) => {
+  get: () => T
+  set: (value: T) => void
+}
+
+export function customRef<T>(factory: CustomRefFactory<T>): Ref<T> {
+  const dep = createDep()
+
+  const { get, set } = factory(
+    () => track(dep),
+    () => trigger(dep),
+  )
+
+  const customRefImpl = {
+    get value(): T {
+      return get()
+    },
+    set value(newValue: T) {
+      set(newValue)
+    },
+  } as Ref<T>
+  def(customRefImpl, REF_FLAG, true)
+  def(customRefImpl, DEP_FLAG, dep)
+
+  return customRefImpl
+}
+
+type ToRef<T = unknown> = Ref<T>
+
+export function toRef<T extends object, K extends keyof T>(
+  object: T,
+  key: K,
+  defaultValue?: T[K],
+): ToRef<T[K]> {
+  const value = object[key]
+  if (isRef(value)) {
+    return value as ToRef<T[K]>
+  }
+
+  const objectRefImpl = {
+    get value() {
+      const value = object[key]
+      return value === undefined ? defaultValue : value
+    },
+    set(newValue: T[K]) {
+      object[key] = newValue
+    },
+  } as ToRef<T[K]>
+  def(objectRefImpl, REF_FLAG, true)
+
+  return objectRefImpl
+}
+
+type ToRefs<T = unknown> = {
+  [K in keyof T]: ToRef<T[K]>
+}
+
+export function toRefs<T extends object>(object: T): ToRefs<T> {
+  const ret: any = isArray(object) ? new Array(object.length) : {}
+  for (const key in object) {
+    ret[key] = toRef(object, key)
+  }
+  return ret
 }
