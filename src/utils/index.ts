@@ -37,7 +37,7 @@ export function def(obj: object, key: PropertyKey, value: unknown): void {
     configurable: true,
     enumerable: false,
     value,
-    writable: true,
+    writable: false,
   })
 }
 
@@ -91,3 +91,9 @@ export const includes: <T>(arr: T[], el: T, fromIndex?: number) => boolean =
       return false
     }
   })()
+
+export function isValidArrayIndex(val: unknown): val is number {
+  const s = String(val)
+  const n = parseInt(s, 10)
+  return n >= 0 && isFinite(n) && String(n) === s
+}

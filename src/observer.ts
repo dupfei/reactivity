@@ -1,5 +1,6 @@
 import { activeEffect, createDep, Dep, track, trigger } from './effect'
 import { OBSERVER_FLAG, SHALLOW_FLAG, SKIP_FLAG } from './flag'
+import { isReadonly } from './reactive'
 import { isRef } from './ref'
 import {
   def,
@@ -7,6 +8,7 @@ import {
   isArray,
   isObject,
   isPlainObject,
+  isValidArrayIndex,
   sameValue,
   setPrototypeOf,
 } from './utils/index'
@@ -151,7 +153,7 @@ export function defineReactive(
         }
       }
     }
-    return isRef(value) && !shallow ? value.value : value
+    return !shallow && isRef(value) ? value.value : value
   }
 
   function reactiveSetter(newValue: unknown): void {
@@ -194,5 +196,83 @@ export function trackArray(arr: unknown[], seen?: InternalSet<unknown[]>) {
     if (isArray(item)) {
       trackArray(item, seen)
     }
+  }
+}
+
+export function set<T>(array: T[], index: number, value: T): void
+export function set<T>(
+  object: Record<PropertyKey, T>,
+  key: PropertyKey,
+  value: T,
+): void
+export function set<T>(
+  target: T[] | Record<PropertyKey, T>,
+  key: PropertyKey,
+  value: T,
+): void {
+  if (__DEV__) {
+    if (!isArray(target) && !isPlainObject(target)) {
+      console.warn(
+        'Only array or plain object can set reactive property',
+        target,
+      )
+    }
+  }
+  if (isReadonly(target)) {
+    if (__DEV__) {
+      console.warn(
+        `Set operation on key "${key as string}" failed: target is readonly`,
+      )
+    }
+    return
+  }
+  if (isArray(target) && isValidArrayIndex(key)) {
+    target.length = Math.max(target.length, key)
+    target.splice(key, 1, value)
+    return
+  }
+  let ob: Observer | undefined
+  if (
+    (key in target && !(key in Object.prototype)) ||
+    !(ob = target[OBSERVER_FLAG as any] as any as Observer | undefined)
+  ) {
+    target[key as any] = value
+    return
+  }
+  defineReactive(ob.value as Record<PropertyKey, T>, key, value, ob.shallow)
+  trigger(ob.dep)
+}
+
+export function del<T>(array: T[], key: number): void
+export function del<T>(object: Record<PropertyKey, T>, key: PropertyKey): void
+export function del<T>(
+  target: T[] | Record<PropertyKey, T>,
+  key: PropertyKey,
+): void {
+  if (__DEV__) {
+    if (!isArray(target) && !isPlainObject(target)) {
+      console.warn(
+        'Only array or plain object can del reactive property',
+        target,
+      )
+    }
+  }
+  if (isReadonly(target)) {
+    if (__DEV__) {
+      console.warn(
+        `Del operation on key "${key as string}" failed: target is readonly`,
+      )
+    }
+    return
+  }
+  if (isArray(target) && isValidArrayIndex(key)) {
+    target.splice(key, 1)
+    return
+  }
+  if (!hasOwn(target, key)) return
+  delete target[key]
+  const ob = target[OBSERVER_FLAG as any] as any as Observer | undefined
+  if (ob) {
+    trigger(ob.dep)
   }
 }

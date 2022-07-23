@@ -1,3 +1,5 @@
+export const version = __VERSION__
+
 export {
   reactive,
   shallowReactive,
@@ -7,10 +9,18 @@ export {
   isShallow,
   markRaw,
 } from './reactive'
-export { ref, shallowRef, triggerRef, isRef, unref } from './ref'
+export { set, del } from './observer'
+export {
+  ref,
+  shallowRef,
+  triggerRef,
+  customRef,
+  isRef,
+  unref,
+  toRef,
+  toRefs,
+} from './ref'
 export { computed } from './computed'
 export { watchEffect, watchSyncEffect } from './watch'
 export { effectScope, getCurrentScope, onScopeDispose } from './effectScope'
 export { nextTick } from './nextTick'
-
-export const version = __VERSION__
