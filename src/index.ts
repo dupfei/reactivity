@@ -24,6 +24,6 @@ export {
   toRefs,
 } from './ref'
 export { computed } from './computed'
-export { watchEffect, watchSyncEffect } from './watch'
+export { watch, watchEffect, watchSyncEffect } from './watch'
 export { effectScope, getCurrentScope, onScopeDispose } from './effectScope'
 export { nextTick } from './nextTick'

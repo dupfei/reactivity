@@ -17,7 +17,9 @@ interface ReadonlyComputedRef<T> extends WritableComputedRef<T> {
   readonly value: T
 }
 
-type ComputedRef<T = unknown> = ReadonlyComputedRef<T> | WritableComputedRef<T>
+export type ComputedRef<T = unknown> =
+  | ReadonlyComputedRef<T>
+  | WritableComputedRef<T>
 
 export function computed<T>(getter: ComputedGetter<T>): ReadonlyComputedRef<T>
 export function computed<T>(
