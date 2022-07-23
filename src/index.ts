@@ -3,10 +3,13 @@ export const version = __VERSION__
 export {
   reactive,
   shallowReactive,
+  readonly,
+  shallowReadonly,
   isProxy,
   isReactive,
   isReadonly,
   isShallow,
+  toRaw,
   markRaw,
 } from './reactive'
 export { set, del } from './observer'
