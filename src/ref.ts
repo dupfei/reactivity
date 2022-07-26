@@ -92,9 +92,9 @@ export function toRef<T extends object, K extends keyof T>(
   const objectRefImpl = {
     get value() {
       const value = object[key]
-      return value === undefined ? defaultValue : value
+      return (value === undefined ? defaultValue : value) as T[K]
     },
-    set(newValue: T[K]) {
+    set value(newValue: T[K]) {
       object[key] = newValue
     },
   } as ToRef<T[K]>
