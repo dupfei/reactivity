@@ -112,8 +112,12 @@ function createReadonly<T extends object>(
       configurable: true,
       enumerable: true,
       get() {
-        const value = target[key]
-        return !shallow && isPlainObject(value) ? readonly(value) : value
+        let value = target[key]
+        if (shallow) return value
+        if (isRef(value)) {
+          value = value.value
+        }
+        return isPlainObject(value) ? readonly(value) : value
       },
       set: __DEV__
         ? () => {
