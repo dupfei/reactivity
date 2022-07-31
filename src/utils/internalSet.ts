@@ -119,22 +119,22 @@ export class InternalSet<T> {
   }
 }
 
-const metadataKey = `InternalSetMetadata_${Math.random().toString(36).slice(2)}`
+const objectIdKey = `ReactivityInternalSetObjectId_${Math.random()}`
 let uid = 0
 
 function valueToKey(value: unknown, create?: boolean): EntryKey {
   if (isObject(value) || isFunction(value)) {
-    if (!hasOwn(value, metadataKey)) {
+    if (!hasOwn(value, objectIdKey)) {
       if (!Object.isExtensible(value)) return 'F'
       if (!create) return 'E'
-      Object.defineProperty(value, metadataKey, {
+      Object.defineProperty(value, objectIdKey, {
         configurable: false,
         enumerable: false,
         value: `O${uid++}`,
         writable: false,
       })
     }
-    return (value as any)[metadataKey]
+    return (value as any)[objectIdKey]
   }
   switch (typeof value) {
     case 'string':
@@ -150,5 +150,5 @@ export const createSet: <T>(values?: T[]) => InternalSet<T> =
   // @ts-ignore
   isNative(Set)
     ? // @ts-ignore
-      (values) => new Set(values) as InternalSet<T>
+      (values) => new Set(values)
     : (values) => new InternalSet(values)

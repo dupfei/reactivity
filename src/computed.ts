@@ -1,5 +1,5 @@
 import { createDep, ReactiveEffect, track, trigger } from './effect'
-import { DEP_FLAG, READONLY_FLAG, REF_FLAG } from './flag'
+import { COMPUTED_FLAG, DEP_FLAG, READONLY_FLAG, REF_FLAG } from './flag'
 import { Ref } from './ref'
 import { def, isFunction, NOOP } from './utils/index'
 
@@ -47,7 +47,7 @@ function createComputedRef<T>(
   if (isReadonly) {
     setter = __DEV__
       ? () => {
-          console.warn('computed值是只读的')
+          console.warn('[Reactivity] Computed value is readonly.')
         }
       : NOOP
   }
@@ -64,8 +64,8 @@ function createComputedRef<T>(
   })
   effect.computed = true
 
-  const computedRef = {
-    get value(): T {
+  const computedRef: ComputedRef<T> = {
+    get value() {
       track(dep)
       if (dirty) {
         dirty = false
@@ -73,15 +73,22 @@ function createComputedRef<T>(
       }
       return value
     },
-    set value(newValue: T) {
+    set value(newValue) {
       setter!(newValue)
     },
-  } as ComputedRef<T>
+  }
   def(computedRef, REF_FLAG, true)
+  def(computedRef, COMPUTED_FLAG, true)
   def(computedRef, DEP_FLAG, dep)
   if (isReadonly) {
     def(computedRef, READONLY_FLAG, true)
   }
 
   return computedRef
+}
+
+export function isComputed<T>(
+  ref: ComputedRef<T> | unknown,
+): ref is ComputedRef<T> {
+  return !!(ref && (ref as any)[COMPUTED_FLAG] === true)
 }

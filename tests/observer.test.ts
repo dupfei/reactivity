@@ -135,7 +135,7 @@ describe('observer', () => {
     expect(obj.a).toBe(1)
 
     // 不能被修改
-    expect(() => (obj.a = 100)).toThrowError()
+    obj.a = 100
     expect(obj.a).toBe(1)
   })
 
@@ -184,7 +184,7 @@ describe('observer', () => {
     expect(obj.a).toBe(1)
 
     // 不能被修改
-    expect(() => (obj.a = 100)).toThrowError()
+    obj.a = 100
     expect(obj.a).toBe(1)
   })
 

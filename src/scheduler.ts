@@ -1,7 +1,8 @@
 import { nextTick } from './nextTick'
 import { includes } from './utils/index'
 
-export type SchedulerJob = (() => void) & {
+export type SchedulerJob = {
+  (): void
   allowRecurse?: boolean
 }
 
@@ -12,12 +13,11 @@ let waitingForFlushEnd = false
 
 export function queueFlushJob(job: SchedulerJob): void {
   if (
-    (flushingJobs.length < 1 ||
-      !includes(
-        flushingJobs,
-        job,
-        job.allowRecurse ? flushingIndex + 1 : flushingIndex,
-      )) &&
+    !includes(
+      flushingJobs,
+      job,
+      job.allowRecurse ? flushingIndex + 1 : flushingIndex,
+    ) &&
     !includes(pendingJobs, job)
   ) {
     pendingJobs.push(job)
@@ -28,7 +28,7 @@ export function queueFlushJob(job: SchedulerJob): void {
   }
 }
 
-function flushJobs() {
+function flushJobs(): void {
   while (pendingJobs.length > 0) {
     const temp = flushingJobs
     flushingJobs = pendingJobs

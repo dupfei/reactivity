@@ -16,7 +16,7 @@ import { createSet, InternalSet } from './utils/internalSet'
 
 type WatchEffect = (onCleanup: OnCleanup) => void
 
-type OnCleanup = (cleanupFn: () => void) => void
+type OnCleanup = (cleanup: () => void) => void
 
 interface WatchEffectOptions {
   flush?: 'async' | 'sync'
@@ -38,16 +38,16 @@ export function watchEffect(
     }
   } else {
     if (__DEV__) {
-      console.warn('effect必须是个函数')
+      console.warn('[Reactivity] A watch effect can only be a function.')
     }
     getter = NOOP
   }
 
   let cleanup: () => void
-  const onCleanup: OnCleanup = (fn: () => void) => {
+  const onCleanup: OnCleanup = (fn) => {
     if (__DEV__) {
       if (!isFunction(fn)) {
-        console.warn('cleanupFn必须是个函数')
+        console.warn('[Reactivity] A cleanup can only be a function.')
       }
     }
     cleanup = _effect.onStop = fn
@@ -62,7 +62,7 @@ export function watchEffect(
   if (flush === 'sync') {
     scheduler = job
   } else {
-    // 默认为 async
+    // 默认 async
     scheduler = () => queueFlushJob(job)
   }
 
@@ -116,9 +116,7 @@ export function watch<T>(
 ): StopHandle {
   if (!isFunction(callback)) {
     if (__DEV__) {
-      console.warn(
-        '`watch(source, callback, options?)` callback must be a function',
-      )
+      console.warn('[Reactivity] A watch callback can only be a function.')
     }
     callback = NOOP
   }
@@ -143,9 +141,7 @@ export function watch<T>(
         if (isFunction(s)) return s()
         if (__DEV__) {
           console.warn(
-            'Invalid watch source: ',
-            s,
-            'A watch source can only be a ref, a getter function, a reactive object, or an array of these types',
+            '[Reactivity] A watch source can only be a ref, a getter function, a reactive object, or an array of these types.',
           )
         }
       })
@@ -154,9 +150,7 @@ export function watch<T>(
   } else {
     if (__DEV__) {
       console.warn(
-        'Invalid watch source: ',
-        source,
-        'A watch source can only be a ref, a getter function, a reactive object, or an array of these types',
+        '[Reactivity] A watch source can only be a ref, a getter function, a reactive object, or an array of these types.',
       )
     }
     getter = NOOP
@@ -168,10 +162,10 @@ export function watch<T>(
   }
 
   let cleanup: () => void
-  const onCleanup: OnCleanup = (fn: () => void) => {
+  const onCleanup: OnCleanup = (fn) => {
     if (__DEV__) {
       if (!isFunction(fn)) {
-        console.warn('cleanupFn must be a function')
+        console.warn('[Reactivity] A cleanup can only be a function.')
       }
     }
     cleanup = effect.onStop = fn
@@ -207,7 +201,7 @@ export function watch<T>(
   if (flush === 'sync') {
     scheduler = job
   } else {
-    // default: 'async'
+    // 默认 async
     scheduler = () => queueFlushJob(job)
   }
 

@@ -43,7 +43,7 @@ export function triggerRef(ref: ShallowRef): void {
   }
 }
 
-export function unref<T>(ref: T | Ref<T>): T {
+export function unref<T>(ref: Ref<T> | T): T {
   return isRef(ref) ? ref.value : ref
 }
 
@@ -63,14 +63,14 @@ export function customRef<T>(factory: CustomRefFactory<T>): Ref<T> {
     () => trigger(dep),
   )
 
-  const customRefImpl = {
-    get value(): T {
+  const customRefImpl: Ref<T> = {
+    get value() {
       return get()
     },
-    set value(newValue: T) {
+    set value(newValue) {
       set(newValue)
     },
-  } as Ref<T>
+  }
   def(customRefImpl, REF_FLAG, true)
   def(customRefImpl, DEP_FLAG, dep)
 
@@ -89,15 +89,15 @@ export function toRef<T extends object, K extends keyof T>(
     return value as ToRef<T[K]>
   }
 
-  const objectRefImpl = {
+  const objectRefImpl: ToRef<T[K]> = {
     get value() {
       const value = object[key]
-      return (value === undefined ? defaultValue : value) as T[K]
+      return value === undefined ? defaultValue! : value
     },
-    set value(newValue: T[K]) {
+    set value(newValue) {
       object[key] = newValue
     },
-  } as ToRef<T[K]>
+  }
   def(objectRefImpl, REF_FLAG, true)
 
   return objectRefImpl

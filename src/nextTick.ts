@@ -5,19 +5,19 @@ const UA = inBrowser && window.navigator.userAgent.toLowerCase()
 const isIOS = UA && /iphone|ipad|ipod|ios/.test(UA)
 const isIE = UA && /msie|trident/.test(UA)
 
-let pendingCbs: (() => void)[] = []
-let flushingCbs: (() => void)[] = []
+let pendingCallbacks: (() => void)[] = []
+let flushingCallbacks: (() => void)[] = []
 let pending = false
 
-function flushCbs(): void {
+function flushCallbacks(): void {
   pending = false
-  const temp = flushingCbs
-  flushingCbs = pendingCbs
-  pendingCbs = temp
-  for (let i = 0; i < flushingCbs.length; i++) {
-    flushingCbs[i]()
+  const temp = flushingCallbacks
+  flushingCallbacks = pendingCallbacks
+  pendingCallbacks = temp
+  for (let i = 0; i < flushingCallbacks.length; i++) {
+    flushingCallbacks[i]()
   }
-  flushingCbs.length = 0
+  flushingCallbacks.length = 0
 }
 
 const timerFunc: () => void = (() => {
@@ -26,7 +26,7 @@ const timerFunc: () => void = (() => {
     // @ts-ignore
     const p = Promise.resolve()
     return () => {
-      p.then(flushCbs)
+      p.then(flushCallbacks)
       if (isIOS) {
         setTimeout(NOOP)
       }
@@ -34,7 +34,7 @@ const timerFunc: () => void = (() => {
   }
   if (!isIE && isNative(MutationObserver)) {
     let num = 1
-    const observer = new MutationObserver(flushCbs)
+    const observer = new MutationObserver(flushCallbacks)
     const textNode = document.createTextNode(String(num))
     observer.observe(textNode, { characterData: true })
     return () => {
@@ -45,11 +45,11 @@ const timerFunc: () => void = (() => {
   if (isNative(setImmediate)) {
     return () => {
       // @ts-ignore
-      setImmediate(flushCbs)
+      setImmediate(flushCallbacks)
     }
   }
   return () => {
-    setTimeout(flushCbs, 0)
+    setTimeout(flushCallbacks, 0)
   }
 })()
 
@@ -57,7 +57,7 @@ export function nextTick(): Promise<void>
 export function nextTick(callback: () => void): void
 export function nextTick(callback?: () => void): Promise<void> | void {
   let resolve: (() => void) | undefined
-  pendingCbs.push(() => {
+  pendingCallbacks.push(() => {
     if (callback) {
       callback()
     } else if (resolve) {
@@ -68,8 +68,12 @@ export function nextTick(callback?: () => void): Promise<void> | void {
     pending = true
     timerFunc()
   }
-  // @ts-ignore
-  if (!callback && typeof Promise !== 'undefined') {
+
+  if (
+    !callback &&
+    // @ts-ignore
+    typeof Promise !== 'undefined'
+  ) {
     // @ts-ignore
     return new Promise((_resolve) => {
       resolve = _resolve

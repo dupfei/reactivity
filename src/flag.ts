@@ -1,7 +1,16 @@
-export const OBSERVER_FLAG = '$$__observer__$$'
-export const SHALLOW_FLAG = '$$__shallow__$$'
-export const SKIP_FLAG = '$$__skip__$$'
-export const REF_FLAG = '$$__ref__$$'
-export const DEP_FLAG = '$$__dep__$$'
-export const READONLY_FLAG = '$$__readonly__$$'
-export const RAW_FLAG = '$$__raw__$$'
+const FLAG_PREFIX = '$$__ReactivityInternalFlag-'
+const FLAG_SUFFIX = '__$$'
+
+type Flag<S extends string> = `${typeof FLAG_PREFIX}${S}${typeof FLAG_SUFFIX}`
+
+export const createFlag = <S extends string>(name: S): Flag<S> =>
+  `${FLAG_PREFIX}${name}${FLAG_SUFFIX}`
+
+export const OBSERVER_FLAG = createFlag('observer')
+export const SHALLOW_FLAG = createFlag('shallow')
+export const SKIP_FLAG = createFlag('skip')
+export const REF_FLAG = createFlag('ref')
+export const COMPUTED_FLAG = createFlag('computed')
+export const DEP_FLAG = createFlag('dep')
+export const READONLY_FLAG = createFlag('readonly')
+export const RAW_FLAG = createFlag('raw')

@@ -9,6 +9,7 @@ import {
   isObject,
   isPlainObject,
   isValidArrayIndex,
+  NOOP,
   sameValue,
   setPrototypeOf,
 } from './utils/index'
@@ -120,7 +121,7 @@ export function defineReactive(
   const getter = descriptor && descriptor.get
   const setter = descriptor && descriptor.set
   const isAccessorProperty = getter || setter
-  const nonWritable = isAccessorProperty
+  const isReadonly = isAccessorProperty
     ? !setter
     : !!descriptor && descriptor.writable === false
 
@@ -138,8 +139,9 @@ export function defineReactive(
         ? getter.call(obj)
         : undefined
       : val
-    // 如果是非浅层 observe，访问时对属性值进行深层 observe
-    // 存在 getter 时每次都要对返回值进行深层 observe
+    // 非 shallow 时，
+    // 直到访问对属性值时才进行深层 observe，
+    // 如果存在 getter，每次都要对返回值进行深层 observe
     if (!shallow && (shouldObserveChild || getter)) {
       shouldObserveChild = false
       childOb = observe(value, false)
@@ -157,12 +159,13 @@ export function defineReactive(
   }
 
   function reactiveSetter(newValue: unknown): void {
-    // 每次修改都会触发原有的 setter
+    // 访问器属性的情况是复杂的，很难确定 getter 和 setter 之间的联系
+    // 每次触发 setter 时都会调用 trigger，不管 getter 返回的值是否发生改变
     if (setter) {
       setter.call(obj, newValue)
+      trigger(dep)
+      return
     }
-    // 对于访问器属性，很难猜测 get 和 set 之间的联系，默认认为每次 set 的值改变后，get 的值也会改变
-    // 关于首次 set，很难找到合适的值进行比对，默认认为是全新的值
     if (!sameValue(newValue, val)) {
       if (!shallow && isRef(val) && !isRef(newValue)) {
         val.value = newValue
@@ -178,7 +181,7 @@ export function defineReactive(
     configurable: true,
     enumerable: true,
     get: reactiveGetter,
-    set: nonWritable ? undefined : reactiveSetter,
+    set: isReadonly ? NOOP : reactiveSetter,
   })
 
   return dep
@@ -213,16 +216,13 @@ export function set<T>(
   if (__DEV__) {
     if (!isArray(target) && !isPlainObject(target)) {
       console.warn(
-        'Only array or plain object can set reactive property',
-        target,
+        '[Reactivity] Only array or plain object can set reactive property.',
       )
     }
   }
   if (isReadonly(target)) {
     if (__DEV__) {
-      console.warn(
-        `Set operation on key "${key as string}" failed: target is readonly`,
-      )
+      console.warn('[Reactivity] Target is readonly.')
     }
     return
   }
@@ -239,7 +239,7 @@ export function set<T>(
     target[key as any] = value
     return
   }
-  defineReactive(ob.value as Record<PropertyKey, T>, key, value, ob.shallow)
+  defineReactive(ob.value as any, key, value, ob.shallow)
   trigger(ob.dep)
 }
 
@@ -252,16 +252,13 @@ export function del<T>(
   if (__DEV__) {
     if (!isArray(target) && !isPlainObject(target)) {
       console.warn(
-        'Only array or plain object can del reactive property',
-        target,
+        '[Reactivity] Only array or plain object can delete reactive property.',
       )
     }
   }
   if (isReadonly(target)) {
     if (__DEV__) {
-      console.warn(
-        `Del operation on key "${key as string}" failed: target is readonly`,
-      )
+      console.warn('[Reactivity] Target is readonly.')
     }
     return
   }

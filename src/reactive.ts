@@ -1,4 +1,7 @@
+import { isComputed } from './computed'
 import {
+  COMPUTED_FLAG,
+  createFlag,
   OBSERVER_FLAG,
   RAW_FLAG,
   READONLY_FLAG,
@@ -8,8 +11,9 @@ import {
 } from './flag'
 import { observe, Observer } from './observer'
 import { isRef, Ref } from './ref'
-import { def, isPlainObject, NOOP } from './utils/index'
+import { def, isArray, isPlainObject, NOOP } from './utils/index'
 
+// TODO: unwrap ref type 完善
 export function reactive<T extends object>(target: T): T {
   makeReactive(target, false)
   return target
@@ -23,19 +27,32 @@ export function shallowReactive<T extends object>(target: T): T {
 function makeReactive<T extends object>(target: T, shallow: boolean): void {
   if (isReadonly(target)) return
   if (__DEV__) {
+    if (isArray(target)) {
+      console.warn(
+        `[Reactivity] Avoid using Array as root value for ${
+          shallow ? 'shallowReactive()' : 'reactive()'
+        } as it cannot be tracked in watch() or watchEffect(). Use ${
+          shallow ? `shallowRef()` : `ref()`
+        } instead.`,
+      )
+    }
     const existingOb: Observer | undefined =
       target && (target as any)[OBSERVER_FLAG]
     if (existingOb && existingOb.shallow !== shallow) {
       console.warn(
-        `当前值已经是${
+        `[Reactivity] Target is already a ${
           existingOb.shallow ? 'shallowReactive' : 'reactive'
-        }，不能更改为${shallow ? 'shallowReactive' : 'reactive'}`,
+        } object, and cannot be converted to ${
+          shallow ? 'shallowReactive' : 'reactive'
+        }.`,
       )
     }
   }
   const ob = observe(target, shallow)
-  if (__DEV__ && !ob) {
-    console.warn('当前类型的值不能被转换为响应式')
+  if (__DEV__) {
+    if (!ob) {
+      console.warn('[Reactivity] Target cannot be made reactive.')
+    }
   }
 }
 
@@ -49,6 +66,7 @@ type DeepReadonly<T> = T extends Builtin
   ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
   : Readonly<T>
 
+// TODO: unwrap ref type 完善
 export function readonly<T extends object>(target: T): DeepReadonly<T> {
   return createReadonly(target, false) as DeepReadonly<T>
 }
@@ -57,8 +75,8 @@ export function shallowReadonly<T extends object>(target: T): Readonly<T> {
   return createReadonly(target, true) as Readonly<T>
 }
 
-const RAW_TO_READONLY_FLAG = '$$__rawToReadonly__$$'
-const RAW_TO_SHALLOW_READONLY_FLAG = '$$__rawToShallowReadonly__$$'
+const RAW_TO_READONLY_FLAG = createFlag('rawToReadonly')
+const RAW_TO_SHALLOW_READONLY_FLAG = createFlag('rawToShallowReadonly')
 
 function createReadonly<T extends object>(
   target: T,
@@ -66,7 +84,7 @@ function createReadonly<T extends object>(
 ): DeepReadonly<T> | Readonly<T> {
   if (!isPlainObject(target)) {
     if (__DEV__) {
-      console.warn('Target cannot be made readonly', target)
+      console.warn('[Reactivity] Target cannot be made readonly.')
     }
     return target
   }
@@ -75,11 +93,11 @@ function createReadonly<T extends object>(
       const targetIsShallowReadonly = isShallow(target)
       if (targetIsShallowReadonly !== shallow) {
         console.warn(
-          `Target is already a ${
+          `[Reactivity] Target is already a ${
             targetIsShallowReadonly ? 'shallowReadonly' : 'readonly'
           } object, and cannot be converted to ${
             shallow ? 'shallowReadonly' : 'readonly'
-          }`,
+          }.`,
         )
       }
     }
@@ -101,6 +119,9 @@ function createReadonly<T extends object>(
   if (isRef(target)) {
     def(proxy, REF_FLAG, true)
   }
+  if (isComputed(target)) {
+    def(proxy, COMPUTED_FLAG, true)
+  }
   if (shallow || isShallow(target)) {
     def(proxy, SHALLOW_FLAG, true)
   }
@@ -121,9 +142,7 @@ function createReadonly<T extends object>(
       },
       set: __DEV__
         ? () => {
-            console.warn(
-              `Set operation on key "${key}" failed: target is readonly`,
-            )
+            console.warn('[Reactivity] Target is readonly.')
           }
         : NOOP,
     })

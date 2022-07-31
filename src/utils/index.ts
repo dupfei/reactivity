@@ -1,4 +1,4 @@
-export const NOOP = () => {}
+export const NOOP = (): void => {}
 
 export const isNative = (val: unknown): boolean =>
   typeof val === 'function' && /native code/.test(val.toString())
@@ -19,6 +19,7 @@ export const isPlainObject = (
   toString.call(val) === '[object Object]'
 
 const hasOwnProperty = Object.prototype.hasOwnProperty
+
 export const hasOwn = (
   obj: object,
   key: PropertyKey,
@@ -41,18 +42,14 @@ export function def(obj: object, key: PropertyKey, value: unknown): void {
   })
 }
 
-const sameValueZero = (x: unknown, y: unknown) =>
+const sameValueZero = (x: unknown, y: unknown): boolean =>
   x === y || (x !== x && y !== y)
 
 export const sameValue: (x: unknown, y: unknown) => boolean = (() => {
   // @ts-ignore
   if (isNative(Object.is)) return Object.is
-  return (x: unknown, y: unknown): boolean => {
-    if (x === y) {
-      return x !== 0 || 1 / x === 1 / (y as number)
-    }
-    return x !== x && y !== y
-  }
+  return (x, y) =>
+    x === y ? x !== 0 || 1 / x === 1 / (y as number) : x !== x && y !== y
 })()
 
 export const setPrototypeOf: (obj: object, proto: object) => void = (() => {
@@ -78,15 +75,15 @@ export const includes: <T>(arr: T[], el: T, fromIndex?: number) => boolean =
     if (isNative(Array.prototype.includes)) {
       // @ts-ignore
       const arrayIncludes = Array.prototype.includes
-      return (arr, el, fromIndex = 0) => arrayIncludes.call(arr, el, fromIndex)
+      return (arr, el, fromIndex) => arrayIncludes.call(arr, el, fromIndex)
     }
-    return (arr, el, fromIndex = 0) => {
+    return (arr, el, fromIndex) => {
       const len = arr.length
       if (len < 1) return false
-      const n = fromIndex | 0
-      let k = Math.max(n >= 0 ? n : len + n, 0)
-      while (k < len) {
-        if (sameValueZero(el, arr[k++])) return true
+      // 如果 fromIndex 是 undefined，这一步会处理成 0
+      const n = (fromIndex as number) | 0
+      for (let k = Math.max(n >= 0 ? n : len + n, 0); k < len; k++) {
+        if (sameValueZero(el, arr[k])) return true
       }
       return false
     }

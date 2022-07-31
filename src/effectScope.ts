@@ -27,7 +27,7 @@ class EffectScopeImpl {
         activeEffectScope = currentEffectScope
       }
     } else if (__DEV__) {
-      console.warn('不能对不活跃的effectScope执行run')
+      console.warn('[Reactivity] Cannot run an inactive effect scope.')
     }
   }
 
@@ -78,6 +78,6 @@ export function onScopeDispose(fn: () => void): void {
   if (activeEffectScope) {
     activeEffectScope.cleanups.push(fn)
   } else if (__DEV__) {
-    console.warn('没有活跃的effectScope可以关联')
+    console.warn('[Reactivity] No active effect scope to be associated with.')
   }
 }

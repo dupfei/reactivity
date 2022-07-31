@@ -2,7 +2,9 @@ import { recordEffectScope } from './effectScope'
 import { createSet, InternalSet } from './utils/internalSet'
 
 export type Dep = InternalSet<ReactiveEffect> & {
+  // 过去被追踪
   w: number
+  // 最新被追踪
   n: number
 }
 
@@ -13,6 +15,8 @@ export function createDep(): Dep {
   return dep
 }
 
+// 二进制数的每一位代表着嵌套 ReactiveEffect 中的每一层
+// 每一位通过 0、1 标记依赖的追踪状态
 let trackDepth = 0
 const MAX_TRACK_DEPTH = 30
 let trackOpBit = 1
@@ -22,30 +26,29 @@ const newTracked = (dep: Dep): boolean => (dep.n & trackOpBit) > 0
 
 function initDepMarkers(effect: ReactiveEffect): void {
   const { deps } = effect
-  if (deps.length > 0) {
-    for (let i = 0; i < deps.length; i++) {
-      // 设置 wasTracked 标记
-      deps[i].w |= trackOpBit
-    }
+  for (let i = 0; i < deps.length; i++) {
+    // 设置 过去被追踪 标记
+    deps[i].w |= trackOpBit
   }
 }
 
 function finalizeDepMarkers(effect: ReactiveEffect): void {
   const { deps } = effect
   if (deps.length > 0) {
-    let j = 0
+    let newIndex = 0
     for (let i = 0; i < deps.length; i++) {
       const dep = deps[i]
       if (wasTracked(dep) && !newTracked(dep)) {
         dep.delete(effect)
       } else {
-        deps[j++] = dep
+        // 最新被追踪
+        deps[newIndex++] = dep
       }
-      // 清除 wasTracked 和 newTracked 标记
+      // 清除 过去被追踪 和 最新被追踪 标记
       dep.w &= ~trackOpBit
       dep.n &= ~trackOpBit
     }
-    deps.length = j
+    deps.length = newIndex
   }
 }
 
@@ -127,7 +130,7 @@ export function track(dep: Dep): void {
     let shouldTrack = false
     if (trackDepth <= MAX_TRACK_DEPTH) {
       if (!newTracked(dep)) {
-        // 设置 newTracked 标记
+        // 设置 最新被追踪 标记
         dep.n |= trackOpBit
         shouldTrack = !wasTracked(dep)
       }
@@ -142,7 +145,7 @@ export function track(dep: Dep): void {
 }
 
 export function trigger(dep: Dep): void {
-  // 固定本次要触发的 effects，触发过程中新增的 effect 本次不触发
+  // 固定本次要触发的 effects，触发过程中新增的 effect 不在本次触发
   const effects: ReactiveEffect[] = []
   const computedEffects: ReactiveEffect[] = []
   dep.forEach((effect) => {
@@ -152,7 +155,7 @@ export function trigger(dep: Dep): void {
       effects.push(effect)
     }
   })
-  // 优先触发 computedEffect，保证其它 effect 触发时 computed 值已经更新
+  // 优先触发 computedEffect，确保其它 effect 触发时其中的 computed 值已经更新
   triggerEffects(computedEffects)
   triggerEffects(effects)
 }
