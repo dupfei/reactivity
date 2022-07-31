@@ -1,4 +1,10 @@
-import { createDep, ReactiveEffect, track, trigger } from './effect'
+import {
+  createDep,
+  DebuggerOptions,
+  ReactiveEffect,
+  track,
+  trigger,
+} from './effect'
 import { COMPUTED_FLAG, DEP_FLAG, READONLY_FLAG, REF_FLAG } from './flag'
 import { Ref } from './ref'
 import { def, isFunction, NOOP } from './utils/index'
@@ -21,12 +27,17 @@ export type ComputedRef<T = unknown> =
   | ReadonlyComputedRef<T>
   | WritableComputedRef<T>
 
-export function computed<T>(getter: ComputedGetter<T>): ReadonlyComputedRef<T>
+export function computed<T>(
+  getter: ComputedGetter<T>,
+  debuggerOptions?: DebuggerOptions,
+): ReadonlyComputedRef<T>
 export function computed<T>(
   options: WritableComputedOptions<T>,
+  debuggerOptions?: DebuggerOptions,
 ): WritableComputedRef<T>
 export function computed<T>(
   getterOrOptions: ComputedGetter<T> | WritableComputedOptions<T>,
+  debuggerOptions?: DebuggerOptions,
 ): ComputedRef<T> {
   let getter: ComputedGetter<T>
   let setter: ComputedSetter<T> | undefined
@@ -36,12 +47,17 @@ export function computed<T>(
     getter = getterOrOptions.get
     setter = getterOrOptions.set
   }
-  return createComputedRef(getter, setter)
+  return createComputedRef(
+    getter,
+    setter,
+    __DEV__ ? debuggerOptions : undefined,
+  )
 }
 
 function createComputedRef<T>(
   getter: ComputedGetter<T>,
   setter?: ComputedSetter<T>,
+  debuggerOptions?: DebuggerOptions,
 ): ComputedRef<T> {
   const isReadonly = !setter
   if (isReadonly) {
@@ -59,14 +75,29 @@ function createComputedRef<T>(
   const effect = new ReactiveEffect(getter, () => {
     if (!dirty) {
       dirty = true
-      trigger(dep)
+      trigger(
+        dep,
+        __DEV__
+          ? { type: 'set', target: computedRef, key: 'value' }
+          : undefined,
+      )
     }
   })
   effect.computed = true
 
+  if (__DEV__ && debuggerOptions) {
+    effect.onTrack = debuggerOptions.onTrack
+    effect.onTrigger = debuggerOptions.onTrigger
+  }
+
   const computedRef: ComputedRef<T> = {
     get value() {
-      track(dep)
+      track(
+        dep,
+        __DEV__
+          ? { type: 'get', target: computedRef, key: 'value' }
+          : undefined,
+      )
       if (dirty) {
         dirty = false
         value = effect.run()

@@ -69,7 +69,12 @@ methodsToPatch.forEach((method) => {
           observeArray(inserted)
         }
       }
-      trigger(ob.dep)
+      trigger(
+        ob.dep,
+        __DEV__
+          ? { type: 'array-mutation', target: this, key: method }
+          : undefined,
+      )
       return result
     },
   )
@@ -147,7 +152,7 @@ export function defineReactive(
       childOb = observe(value, false)
     }
     if (activeEffect) {
-      track(dep)
+      track(dep, __DEV__ ? { type: 'get', target: obj, key } : undefined)
       if (childOb) {
         track(childOb.dep)
         if (isArray(value)) {
@@ -163,16 +168,22 @@ export function defineReactive(
     // 每次触发 setter 时都会调用 trigger，不管 getter 返回的值是否发生改变
     if (setter) {
       setter.call(obj, newValue)
-      trigger(dep)
+      trigger(dep, __DEV__ ? { type: 'set', target: obj, key } : undefined)
       return
     }
     if (!sameValue(newValue, val)) {
       if (!shallow && isRef(val) && !isRef(newValue)) {
         val.value = newValue
       } else {
+        const oldValue = val
         val = newValue
         shouldObserveChild = true
-        trigger(dep)
+        trigger(
+          dep,
+          __DEV__
+            ? { type: 'set', target: obj, key, newValue, oldValue }
+            : undefined,
+        )
       }
     }
   }
@@ -240,7 +251,12 @@ export function set<T>(
     return
   }
   defineReactive(ob.value as any, key, value, ob.shallow)
-  trigger(ob.dep)
+  trigger(
+    ob.dep,
+    __DEV__
+      ? { type: 'add', target, key, newValue: value, oldValue: undefined }
+      : undefined,
+  )
 }
 
 export function del<T>(array: T[], key: number): void
@@ -270,6 +286,6 @@ export function del<T>(
   delete target[key]
   const ob = target[OBSERVER_FLAG as any] as any as Observer | undefined
   if (ob) {
-    trigger(ob.dep)
+    trigger(ob.dep, __DEV__ ? { type: 'delete', target, key } : undefined)
   }
 }

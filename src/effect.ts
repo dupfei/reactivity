@@ -56,12 +56,35 @@ export type EffectScheduler = () => void
 
 export let activeEffect: ReactiveEffect | undefined
 
+type DebuggerEvent<Type> = {
+  effect: ReactiveEffect
+} & DebuggerEventExtraInfo<Type>
+
+type TrackOpTypes = 'get'
+type TriggerOpTypes = 'set' | 'add' | 'delete' | 'array-mutation'
+
+type DebuggerEventExtraInfo<Type> = {
+  type: Type
+  target: object
+  key: PropertyKey
+  newValue?: unknown
+  oldValue?: unknown
+}
+
+export interface DebuggerOptions {
+  onTrack?: (event: DebuggerEvent<TrackOpTypes>) => void
+  onTrigger?: (event: DebuggerEvent<TriggerOpTypes>) => void
+}
+
 export class ReactiveEffect<T = unknown> {
   active = true
   deps: Dep[] = []
   computed?: boolean
   private deferStop?: boolean
   onStop?: () => void
+
+  onTrack?: DebuggerOptions['onTrack']
+  onTrigger?: DebuggerOptions['onTrigger']
 
   constructor(
     public fn: () => T,
@@ -125,7 +148,10 @@ function cleanupDeps(effect: ReactiveEffect): void {
   }
 }
 
-export function track(dep: Dep): void {
+export function track(
+  dep: Dep,
+  debuggerEventExtraInfo?: DebuggerEventExtraInfo<TrackOpTypes>,
+): void {
   if (activeEffect) {
     let shouldTrack = false
     if (trackDepth <= MAX_TRACK_DEPTH) {
@@ -140,11 +166,21 @@ export function track(dep: Dep): void {
     if (shouldTrack) {
       dep.add(activeEffect)
       activeEffect.deps.push(dep)
+      if (__DEV__ && activeEffect.onTrack) {
+        activeEffect.onTrack({
+          effect: activeEffect,
+          // @ts-ignore
+          ...debuggerEventExtraInfo!,
+        })
+      }
     }
   }
 }
 
-export function trigger(dep: Dep): void {
+export function trigger(
+  dep: Dep,
+  debuggerEventExtraInfo?: DebuggerEventExtraInfo<TriggerOpTypes>,
+): void {
   // 固定本次要触发的 effects，触发过程中新增的 effect 不在本次触发
   const effects: ReactiveEffect[] = []
   const computedEffects: ReactiveEffect[] = []
@@ -156,14 +192,24 @@ export function trigger(dep: Dep): void {
     }
   })
   // 优先触发 computedEffect，确保其它 effect 触发时其中的 computed 值已经更新
-  triggerEffects(computedEffects)
-  triggerEffects(effects)
+  triggerEffects(computedEffects, __DEV__ ? debuggerEventExtraInfo : undefined)
+  triggerEffects(effects, __DEV__ ? debuggerEventExtraInfo : undefined)
 }
 
-function triggerEffects(effects: ReactiveEffect[]): void {
+function triggerEffects(
+  effects: ReactiveEffect[],
+  debuggerEventExtraInfo?: DebuggerEventExtraInfo<TriggerOpTypes>,
+): void {
   for (let i = 0; i < effects.length; i++) {
     const effect = effects[i]
     if (effect !== activeEffect) {
+      if (__DEV__ && effect.onTrigger) {
+        effect.onTrigger({
+          effect,
+          // @ts-ignore
+          ...debuggerEventExtraInfo!,
+        })
+      }
       if (effect.scheduler) {
         effect.scheduler()
       } else {

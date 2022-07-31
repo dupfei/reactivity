@@ -1,5 +1,5 @@
 import { ComputedRef } from './computed'
-import { EffectScheduler, ReactiveEffect } from './effect'
+import { DebuggerOptions, EffectScheduler, ReactiveEffect } from './effect'
 import { SKIP_FLAG } from './flag'
 import { isReactive, isShallow } from './reactive'
 import { isRef, Ref } from './ref'
@@ -18,7 +18,7 @@ type WatchEffect = (onCleanup: OnCleanup) => void
 
 type OnCleanup = (cleanup: () => void) => void
 
-interface WatchEffectOptions {
+interface WatchEffectOptions extends DebuggerOptions {
   flush?: 'async' | 'sync'
 }
 
@@ -26,7 +26,7 @@ type StopHandle = () => void
 
 export function watchEffect(
   effect: WatchEffect,
-  { flush }: WatchEffectOptions = {},
+  { flush, onTrack, onTrigger }: WatchEffectOptions = {},
 ): StopHandle {
   let getter: () => unknown
   if (isFunction(effect)) {
@@ -67,6 +67,12 @@ export function watchEffect(
   }
 
   const _effect = new ReactiveEffect(getter, scheduler)
+
+  if (__DEV__) {
+    _effect.onTrack = onTrack
+    _effect.onTrigger = onTrigger
+  }
+
   _effect.run()
 
   return () => {
@@ -74,8 +80,20 @@ export function watchEffect(
   }
 }
 
-export function watchSyncEffect(effect: WatchEffect): StopHandle {
-  return watchEffect(effect, { flush: 'sync' })
+export function watchSyncEffect(
+  effect: WatchEffect,
+  debuggerOptions?: DebuggerOptions,
+): StopHandle {
+  return watchEffect(
+    effect,
+    __DEV__
+      ? {
+          // @ts-ignore
+          ...debuggerOptions,
+          flush: 'sync',
+        }
+      : { flush: 'sync' },
+  )
 }
 
 type WatchSource<T> =
@@ -112,7 +130,7 @@ export function watch<T>(
 export function watch<T>(
   source: WatchSource<T> | WatchSource<T>[],
   callback: WatchCallback<T | T[]>,
-  { immediate, deep, flush }: WatchOptions = {},
+  { immediate, deep, flush, onTrack, onTrigger }: WatchOptions = {},
 ): StopHandle {
   if (!isFunction(callback)) {
     if (__DEV__) {
@@ -206,6 +224,11 @@ export function watch<T>(
   }
 
   const effect = new ReactiveEffect(getter, scheduler)
+
+  if (__DEV__) {
+    effect.onTrack = onTrack
+    effect.onTrigger = onTrigger
+  }
 
   if (immediate) {
     job()

@@ -39,7 +39,10 @@ export function isRef<T>(value: Ref<T> | unknown): value is Ref<T> {
 
 export function triggerRef(ref: ShallowRef): void {
   if (ref && (ref as any)[DEP_FLAG]) {
-    trigger((ref as any)[DEP_FLAG] as Dep)
+    trigger(
+      (ref as any)[DEP_FLAG] as Dep,
+      __DEV__ ? { type: 'set', target: ref, key: 'value' } : undefined,
+    )
   }
 }
 
@@ -59,8 +62,20 @@ export function customRef<T>(factory: CustomRefFactory<T>): Ref<T> {
   const dep = createDep()
 
   const { get, set } = factory(
-    () => track(dep),
-    () => trigger(dep),
+    () =>
+      track(
+        dep,
+        __DEV__
+          ? { type: 'get', target: customRefImpl, key: 'value' }
+          : undefined,
+      ),
+    () =>
+      trigger(
+        dep,
+        __DEV__
+          ? { type: 'set', target: customRefImpl, key: 'value' }
+          : undefined,
+      ),
   )
 
   const customRefImpl: Ref<T> = {
