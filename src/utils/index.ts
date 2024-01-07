@@ -1,5 +1,9 @@
 export const NOOP = (): void => {}
 
+export const EMPTY_OBJECT = {}
+
+export const UNINITIALIZED_VALUE = {}
+
 export const isNative = (val: unknown): boolean =>
   typeof val === 'function' && /native code/.test(val.toString())
 
@@ -7,50 +11,89 @@ export const isFunction = (val: unknown): val is Function =>
   typeof val === 'function'
 
 export const isObject = (val: unknown): val is object =>
-  val !== null && typeof val === 'object'
+  typeof val === 'object' && val !== null
 
 export const isArray = Array.isArray
 
-const toString = Object.prototype.toString
+const { defineProperty } = Object
 
+export const {
+  create: objectCreate,
+  isExtensible: objectIsExtensible,
+  keys: objectKeys,
+} = Object
+
+const toString = Object.prototype.toString
 export const isPlainObject = (
   val: unknown,
 ): val is Record<PropertyKey, unknown> =>
   toString.call(val) === '[object Object]'
 
 const hasOwnProperty = Object.prototype.hasOwnProperty
-
-export const hasOwn = (
-  obj: object,
+export const hasOwn: <O extends object = object>(
+  obj: O,
   key: PropertyKey,
-): key is keyof typeof obj => hasOwnProperty.call(obj, key)
+) => key is keyof O = isNative(
+  // @ts-ignore
+  Object.hasOwn,
+)
+  ? // @ts-ignore
+    Object.hasOwn
+  : (obj, key) => hasOwnProperty.call(obj, key)
 
 export function remove<T>(arr: T[], el: T): void {
   if (arr.length < 1) return
+  if (arr[arr.length - 1] === el) {
+    arr.length = arr.length - 1
+    return
+  }
   const index = arr.indexOf(el)
   if (index > -1) {
     arr.splice(index, 1)
   }
 }
 
-export function def(obj: object, key: PropertyKey, value: unknown): void {
-  Object.defineProperty(obj, key, {
+export function defineDataProperty(
+  obj: object,
+  key: PropertyKey,
+  value: PropertyDescriptor['value'],
+  writable = false,
+  enumerable = false,
+): void {
+  defineProperty(obj, key, {
     configurable: true,
-    enumerable: false,
+    enumerable,
     value,
-    writable: false,
+    writable,
+  })
+}
+
+export function defineAccessorProperty(
+  obj: object,
+  key: PropertyKey,
+  getter: PropertyDescriptor['get'],
+  setter?: PropertyDescriptor['set'],
+  enumerable = false,
+): void {
+  defineProperty(obj, key, {
+    configurable: true,
+    enumerable,
+    get: getter,
+    set: setter,
   })
 }
 
 const sameValueZero = (x: unknown, y: unknown): boolean =>
   x === y || (x !== x && y !== y)
 
-export const sameValue: (x: unknown, y: unknown) => boolean = (() => {
+export const sameValue: (x: unknown, y: unknown) => boolean = isNative(
   // @ts-ignore
-  if (isNative(Object.is)) return Object.is
-  return (x, y) =>
-    x === y ? x !== 0 || 1 / x === 1 / (y as number) : x !== x && y !== y
-})()
+  Object.is,
+)
+  ? // @ts-ignore
+    Object.is
+  : (x, y) =>
+      x === y ? x !== 0 || 1 / x === 1 / (y as number) : x !== x && y !== y
 
 export const setPrototypeOf: (obj: object, proto: object) => void = (() => {
   // @ts-ignore
@@ -62,9 +105,9 @@ export const setPrototypeOf: (obj: object, proto: object) => void = (() => {
   }
   return (obj, proto) => {
     const keys = Object.getOwnPropertyNames(proto)
-    for (let i = 0; i < keys.length; i++) {
+    for (let i = 0, len = keys.length; i < len; i++) {
       const key = keys[i]
-      def(obj, key, (proto as any)[key])
+      defineDataProperty(obj, key, (proto as any)[key])
     }
   }
 })()
@@ -74,8 +117,7 @@ export const includes: <T>(arr: T[], el: T, fromIndex?: number) => boolean =
     // @ts-ignore
     if (isNative(Array.prototype.includes)) {
       // @ts-ignore
-      const arrayIncludes = Array.prototype.includes
-      return (arr, el, fromIndex) => arrayIncludes.call(arr, el, fromIndex)
+      return (arr, el, fromIndex) => arr.includes(el, fromIndex)
     }
     return (arr, el, fromIndex) => {
       const len = arr.length

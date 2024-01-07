@@ -14,3 +14,12 @@ export const COMPUTED_FLAG = createFlag('computed')
 export const DEP_FLAG = createFlag('dep')
 export const READONLY_FLAG = createFlag('readonly')
 export const RAW_FLAG = createFlag('raw')
+
+export const OBJECT_ID = createFlag('objectId')
+
+export enum DirtyLevels {
+  NotDirty = 0,
+  ComputedValueMaybeDirty = 1,
+  ComputedValueDirty = 2,
+  Dirty = 3,
+}

@@ -1,216 +1,174 @@
-import { activeEffect, createDep, Dep, track, trigger } from './effect'
+import { observeArray, trackArrayItems } from './array'
+import { Dep, createDep } from './dep'
+import { activeEffect, track, trigger } from './effect'
 import { OBSERVER_FLAG, SHALLOW_FLAG, SKIP_FLAG } from './flag'
 import { isReadonly } from './reactive'
 import { isRef } from './ref'
 import {
-  def,
+  UNINITIALIZED_VALUE,
+  defineAccessorProperty,
+  defineDataProperty,
   hasOwn,
   isArray,
   isObject,
   isPlainObject,
   isValidArrayIndex,
-  NOOP,
+  objectIsExtensible,
+  objectKeys,
   sameValue,
-  setPrototypeOf,
 } from './utils/index'
-import { createSet, InternalSet } from './utils/internalSet'
+import { warn } from './utils/warn'
 
-export function observe(value: unknown, shallow = false): Observer | undefined {
+export function observe(
+  value: unknown,
+  shallow: boolean,
+): Observer | undefined {
   if (!isObject(value) || isRef(value)) return
   if (
     hasOwn(value, OBSERVER_FLAG) &&
     (value as any)[OBSERVER_FLAG] instanceof Observer
   ) {
-    return value[OBSERVER_FLAG]
+    return value[OBSERVER_FLAG] as Observer
   }
   if (
     (isArray(value) || isPlainObject(value)) &&
-    Object.isExtensible(value) &&
-    (value as any)[SKIP_FLAG] !== true
+    objectIsExtensible(value) &&
+    !(value as any)[SKIP_FLAG]
   ) {
     return new Observer(value, shallow)
   }
 }
 
-const arrayProto = Array.prototype
-const arrayMethods = Object.create(arrayProto)
-const methodsToPatch = [
-  'push',
-  'pop',
-  'shift',
-  'unshift',
-  'splice',
-  'sort',
-  'reverse',
-]
-methodsToPatch.forEach((method) => {
-  const original = (arrayProto as any)[method] as Function
-  def(
-    arrayMethods,
-    method,
-    function (
-      this: unknown[] & { [OBSERVER_FLAG]: Observer },
-      ...args: unknown[]
-    ): unknown {
-      const result = original.apply(this, args)
-      const ob = this[OBSERVER_FLAG]
-      if (!ob.shallow) {
-        let inserted: unknown[] | undefined
-        switch (method) {
-          case 'push':
-          case 'unshift':
-            inserted = args
-            break
-          case 'splice':
-            inserted = args.slice(2)
-            break
-        }
-        if (inserted) {
-          observeArray(inserted)
-        }
-      }
-      trigger(
-        ob.dep,
-        __DEV__
-          ? { type: 'array-mutation', target: this, key: method }
-          : undefined,
-      )
-      return result
-    },
-  )
-})
-
-function observeArray(arr: unknown[]): void {
-  for (let i = 0; i < arr.length; i++) {
-    observe(arr[i], false)
-  }
-}
-
-const NO_INITIAL_VALUE = {}
-
-export class Observer {
-  dep = createDep()
+export class Observer<T = unknown> {
+  dep: Dep | null = null
 
   constructor(
-    public value: Record<PropertyKey, unknown> | unknown[],
+    public value: Record<PropertyKey, T> | T[],
     public shallow: boolean,
   ) {
-    def(value, OBSERVER_FLAG, this)
+    defineDataProperty(value, OBSERVER_FLAG, this)
     if (shallow) {
-      def(value, SHALLOW_FLAG, true)
+      defineDataProperty(value, SHALLOW_FLAG, true)
     }
 
     if (isArray(value)) {
-      setPrototypeOf(value, arrayMethods)
-      if (!shallow) {
-        observeArray(value)
-      }
+      observeArray(value, shallow)
     } else {
-      const keys = Object.keys(value)
-      for (let i = 0; i < keys.length; i++) {
-        defineReactive(value, keys[i], NO_INITIAL_VALUE, shallow)
+      const keys = objectKeys(value)
+      for (let i = 0, len = keys.length; i < len; i++) {
+        defineReactive(value, keys[i], UNINITIALIZED_VALUE as T, shallow)
       }
     }
   }
 }
 
-export function defineReactive(
-  obj: Record<PropertyKey, unknown>,
-  key: keyof typeof obj,
-  val: unknown,
+export function defineReactive<T>(
+  obj: object,
+  key: PropertyKey,
+  val: T,
   shallow: boolean,
-): Dep | undefined {
+): (() => Dep | null) | undefined {
   const descriptor = Object.getOwnPropertyDescriptor(obj, key)
-  if (descriptor && !descriptor.configurable) return
+  if (descriptor && descriptor.configurable === false) return
 
   const getter = descriptor && descriptor.get
   const setter = descriptor && descriptor.set
   const isAccessorProperty = getter || setter
-  const isReadonly = isAccessorProperty
+  const readonly = isAccessorProperty
     ? !setter
     : !!descriptor && descriptor.writable === false
 
-  if (!isAccessorProperty && val === NO_INITIAL_VALUE) {
-    val = obj[key]
+  if (!isAccessorProperty && val === UNINITIALIZED_VALUE) {
+    val = (obj as any)[key]
   }
 
-  const dep = createDep()
+  let dep: Dep | null = null
   let shouldObserveChild = true
   let childOb: Observer | undefined
 
-  function reactiveGetter(): unknown {
+  function reactiveGetter(): T {
     const value = isAccessorProperty
       ? getter
         ? getter.call(obj)
         : undefined
       : val
     // 非 shallow 时，
-    // 直到访问对属性值时才进行深层 observe，
+    // 直到访问属性值时才进行深层 observe，
     // 如果存在 getter，每次都要对返回值进行深层 observe
     if (!shallow && (shouldObserveChild || getter)) {
       shouldObserveChild = false
       childOb = observe(value, false)
     }
     if (activeEffect) {
-      track(dep, __DEV__ ? { type: 'get', target: obj, key } : undefined)
+      // track obj property
+      track(
+        dep || (dep = createDep(() => (dep = null))),
+        __DEV__ ? { type: 'get', target: obj, key } : undefined,
+      )
       if (childOb) {
-        track(childOb.dep)
+        // track child object/array self
+        track(
+          childOb.dep ||
+            (childOb.dep = createDep(
+              (
+                (ob) => () =>
+                  (ob.dep = null)
+              )(childOb),
+            )),
+        )
         if (isArray(value)) {
-          trackArray(value)
+          // track array items
+          trackArrayItems(value)
         }
       }
     }
     return !shallow && isRef(value) ? value.value : value
   }
 
-  function reactiveSetter(newValue: unknown): void {
-    // 访问器属性的情况是复杂的，很难确定 getter 和 setter 之间的联系
-    // 每次触发 setter 时都会调用 trigger，不管 getter 返回的值是否发生改变
+  function reactiveSetter(newValue: T): void {
+    // 访问器属性比较复杂，很难确定 getter 和 setter 之间的关系
+    // 每次触发 setter 时都会调用 trigger，不管 getter 返回的值是否变化
     if (setter) {
       setter.call(obj, newValue)
-      trigger(dep, __DEV__ ? { type: 'set', target: obj, key } : undefined)
+      if (dep) {
+        trigger(
+          dep,
+          undefined,
+          __DEV__ ? { type: 'set', target: obj, key, newValue } : undefined,
+        )
+      }
       return
     }
     if (!sameValue(newValue, val)) {
       if (!shallow && isRef(val) && !isRef(newValue)) {
+        // trigger ref.value
         val.value = newValue
       } else {
         const oldValue = val
         val = newValue
         shouldObserveChild = true
-        trigger(
-          dep,
-          __DEV__
-            ? { type: 'set', target: obj, key, newValue, oldValue }
-            : undefined,
-        )
+        if (dep) {
+          trigger(
+            dep,
+            undefined,
+            __DEV__
+              ? { type: 'set', target: obj, key, newValue, oldValue }
+              : undefined,
+          )
+        }
       }
     }
   }
 
-  Object.defineProperty(obj, key, {
-    configurable: true,
-    enumerable: true,
-    get: reactiveGetter,
-    set: isReadonly ? NOOP : reactiveSetter,
-  })
+  defineAccessorProperty(
+    obj,
+    key,
+    reactiveGetter,
+    readonly ? undefined : reactiveSetter,
+    true,
+  )
 
-  return dep
-}
-
-export function trackArray(arr: unknown[], seen?: InternalSet<unknown[]>) {
-  seen = seen || createSet()
-  if (seen.has(arr)) return
-  seen.add(arr)
-  for (let i = 0; i < arr.length; i++) {
-    const item = arr[i]
-    if (item && (item as any)[OBSERVER_FLAG]) {
-      track(((item as any)[OBSERVER_FLAG] as Observer).dep)
-    }
-    if (isArray(item)) {
-      trackArray(item, seen)
-    }
-  }
+  return () => dep
 }
 
 export function set<T>(array: T[], index: number, value: T): void
@@ -224,39 +182,42 @@ export function set<T>(
   key: PropertyKey,
   value: T,
 ): void {
-  if (__DEV__) {
-    if (!isArray(target) && !isPlainObject(target)) {
-      console.warn(
-        '[Reactivity] Only array or plain object can set reactive property.',
-      )
-    }
+  if (__DEV__ && !isArray(target) && !isPlainObject(target)) {
+    warn('Only array or plain object can set reactive property.')
   }
+
   if (isReadonly(target)) {
     if (__DEV__) {
-      console.warn('[Reactivity] Target is readonly.')
+      warn('Target is readonly.')
     }
     return
   }
+
   if (isArray(target) && isValidArrayIndex(key)) {
     target.length = Math.max(target.length, key)
     target.splice(key, 1, value)
     return
   }
+
   let ob: Observer | undefined
   if (
     (key in target && !(key in Object.prototype)) ||
-    !(ob = target[OBSERVER_FLAG as any] as any as Observer | undefined)
+    !(ob = (target as any)[OBSERVER_FLAG])
   ) {
-    target[key as any] = value
+    ;(target as any)[key] = value
     return
   }
-  defineReactive(ob.value as any, key, value, ob.shallow)
-  trigger(
-    ob.dep,
-    __DEV__
-      ? { type: 'add', target, key, newValue: value, oldValue: undefined }
-      : undefined,
-  )
+
+  defineReactive(ob.value, key, value, ob.shallow)
+  if (ob.dep) {
+    trigger(
+      ob.dep,
+      undefined,
+      __DEV__
+        ? { type: 'add', target, key, newValue: value, oldValue: undefined }
+        : undefined,
+    )
+  }
 }
 
 export function del<T>(array: T[], key: number): void
@@ -265,27 +226,31 @@ export function del<T>(
   target: T[] | Record<PropertyKey, T>,
   key: PropertyKey,
 ): void {
-  if (__DEV__) {
-    if (!isArray(target) && !isPlainObject(target)) {
-      console.warn(
-        '[Reactivity] Only array or plain object can delete reactive property.',
-      )
-    }
+  if (__DEV__ && !isArray(target) && !isPlainObject(target)) {
+    warn('Only array or plain object can delete reactive property.')
   }
+
   if (isReadonly(target)) {
     if (__DEV__) {
-      console.warn('[Reactivity] Target is readonly.')
+      warn('Target is readonly.')
     }
     return
   }
+
   if (isArray(target) && isValidArrayIndex(key)) {
     target.splice(key, 1)
     return
   }
+
   if (!hasOwn(target, key)) return
+
   delete target[key]
-  const ob = target[OBSERVER_FLAG as any] as any as Observer | undefined
-  if (ob) {
-    trigger(ob.dep, __DEV__ ? { type: 'delete', target, key } : undefined)
+  const ob: Observer | undefined = (target as any)[OBSERVER_FLAG]
+  if (ob && ob.dep) {
+    trigger(
+      ob.dep,
+      undefined,
+      __DEV__ ? { type: 'delete', target, key } : undefined,
+    )
   }
 }

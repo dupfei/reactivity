@@ -23,6 +23,13 @@ export {
   toRefs,
 } from './ref'
 export { computed, isComputed } from './computed'
-export { watch, watchEffect, watchSyncEffect } from './watch'
+export { watch, watchEffect, watchPostEffect, watchSyncEffect } from './watch'
+export {
+  pauseTracking,
+  enableTracking,
+  resetTracking,
+  pauseScheduling,
+  resetScheduling,
+} from './effect'
 export { effectScope, getCurrentScope, onScopeDispose } from './effectScope'
 export { nextTick } from './nextTick'

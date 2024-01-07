@@ -1,53 +1,70 @@
 import { ReactiveEffect } from './effect'
-import { remove } from './utils/index'
+import { warn } from './utils/warn'
 
-let activeEffectScope: EffectScopeImpl | undefined
+export let activeEffectScope: EffectScopeImpl | undefined
 
-class EffectScopeImpl {
-  active = true
+export class EffectScopeImpl {
+  private _active = true
   effects: ReactiveEffect[] = []
-  cleanups: (() => void)[] = []
+  cleanups: (() => void)[] | undefined
   parent: EffectScopeImpl | undefined
-  scopes: EffectScopeImpl[] = []
+  scopes: EffectScopeImpl[] | undefined
+  private index: number | undefined
 
-  constructor(detached?: boolean) {
+  constructor(public detached: boolean) {
+    this.parent = activeEffectScope
     if (!detached && activeEffectScope) {
-      this.parent = activeEffectScope
-      activeEffectScope.scopes.push(this)
+      this.index =
+        (activeEffectScope.scopes || (activeEffectScope.scopes = [])).push(
+          this,
+        ) - 1
     }
   }
 
+  get active() {
+    return this._active
+  }
+
   run<T>(fn: () => T): T | undefined {
-    if (this.active) {
+    if (this._active) {
       const currentEffectScope = activeEffectScope
-      activeEffectScope = this
       try {
+        activeEffectScope = this
         return fn()
       } finally {
         activeEffectScope = currentEffectScope
       }
     } else if (__DEV__) {
-      console.warn('[Reactivity] Cannot run an inactive effect scope.')
+      warn('Cannot run an inactive effect scope.')
     }
   }
 
   stop(fromParent?: boolean): void {
     if (this.active) {
       const { effects, cleanups, scopes } = this
-      let i = 0
-      for (; i < effects.length; i++) {
+      let i, len
+      for (i = 0, len = effects.length; i < len; i++) {
         effects[i].stop()
       }
-      for (i = 0; i < cleanups.length; i++) {
-        cleanups[i]()
+      if (cleanups) {
+        for (i = 0, len = cleanups.length; i < len; i++) {
+          cleanups[i]()
+        }
       }
-      for (i = 0; i < scopes.length; i++) {
-        scopes[i].stop(true)
+      if (scopes) {
+        for (i = 0, len = scopes.length; i < len; i++) {
+          scopes[i].stop(true)
+        }
       }
-      if (this.parent && !fromParent) {
-        remove(this.parent.scopes, this)
+      if (!this.detached && this.parent && !fromParent) {
+        const last = this.parent.scopes!.pop()
+        if (last && last !== this) {
+          this.parent.scopes![this.index!] = last
+          last.index = this.index!
+        }
       }
-      this.active = false
+      this.parent = undefined
+      this._active = false
     }
   }
 }
@@ -58,7 +75,7 @@ interface EffectScope {
 }
 
 export function effectScope(detached?: boolean): EffectScope {
-  return new EffectScopeImpl(detached)
+  return new EffectScopeImpl(!!detached)
 }
 
 export function recordEffectScope(
@@ -70,14 +87,14 @@ export function recordEffectScope(
   }
 }
 
-export function getCurrentScope(): EffectScope | undefined {
+export function getCurrentScope(): EffectScopeImpl | undefined {
   return activeEffectScope
 }
 
 export function onScopeDispose(fn: () => void): void {
   if (activeEffectScope) {
-    activeEffectScope.cleanups.push(fn)
+    ;(activeEffectScope.cleanups || (activeEffectScope.cleanups = [])).push(fn)
   } else if (__DEV__) {
-    console.warn('[Reactivity] No active effect scope to be associated with.')
+    warn('No active effect scope to be associated with.')
   }
 }

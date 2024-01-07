@@ -1,7 +1,12 @@
-import { createDep, Dep, track, trigger } from './effect'
+import { Dep, createDep } from './dep'
+import { track, trigger } from './effect'
 import { DEP_FLAG, REF_FLAG, SHALLOW_FLAG } from './flag'
 import { defineReactive } from './observer'
-import { def, isArray } from './utils/index'
+import {
+  defineAccessorProperty,
+  defineDataProperty,
+  isArray,
+} from './utils/index'
 
 export interface Ref<T = unknown> {
   value: T
@@ -23,11 +28,11 @@ function createRef<T>(value: T, shallow: boolean): Ref<T> | ShallowRef<T> {
   }
 
   const refImpl = {} as Ref<T> | ShallowRef<T>
-  const dep = defineReactive(refImpl as any, 'value', value, shallow)!
-  def(refImpl, REF_FLAG, true)
-  def(refImpl, DEP_FLAG, dep)
+  const getDep = defineReactive(refImpl as any, 'value', value, shallow)!
+  defineDataProperty(refImpl, REF_FLAG, true)
+  defineAccessorProperty(refImpl, DEP_FLAG, getDep)
   if (shallow) {
-    def(refImpl, SHALLOW_FLAG, true)
+    defineDataProperty(refImpl, SHALLOW_FLAG, true)
   }
 
   return refImpl
@@ -38,9 +43,11 @@ export function isRef<T>(value: Ref<T> | unknown): value is Ref<T> {
 }
 
 export function triggerRef(ref: ShallowRef): void {
-  if (ref && (ref as any)[DEP_FLAG]) {
+  const dep: Dep | null | undefined = ref ? (ref as any)[DEP_FLAG] : undefined
+  if (dep) {
     trigger(
-      (ref as any)[DEP_FLAG] as Dep,
+      dep,
+      undefined,
       __DEV__ ? { type: 'set', target: ref, key: 'value' } : undefined,
     )
   }
@@ -59,23 +66,28 @@ type CustomRefFactory<T> = (
 }
 
 export function customRef<T>(factory: CustomRefFactory<T>): Ref<T> {
-  const dep = createDep()
+  let dep: Dep | null = null
 
   const { get, set } = factory(
-    () =>
+    () => {
       track(
-        dep,
+        dep || (dep = createDep(() => (dep = null))),
         __DEV__
           ? { type: 'get', target: customRefImpl, key: 'value' }
           : undefined,
-      ),
-    () =>
-      trigger(
-        dep,
-        __DEV__
-          ? { type: 'set', target: customRefImpl, key: 'value' }
-          : undefined,
-      ),
+      )
+    },
+    () => {
+      if (dep) {
+        trigger(
+          dep,
+          undefined,
+          __DEV__
+            ? { type: 'set', target: customRefImpl, key: 'value' }
+            : undefined,
+        )
+      }
+    },
   )
 
   const customRefImpl: Ref<T> = {
@@ -86,8 +98,8 @@ export function customRef<T>(factory: CustomRefFactory<T>): Ref<T> {
       set(newValue)
     },
   }
-  def(customRefImpl, REF_FLAG, true)
-  def(customRefImpl, DEP_FLAG, dep)
+  defineDataProperty(customRefImpl, REF_FLAG, true)
+  defineAccessorProperty(customRefImpl, REF_FLAG, () => dep)
 
   return customRefImpl
 }
@@ -113,7 +125,7 @@ export function toRef<T extends object, K extends keyof T>(
       object[key] = newValue
     },
   }
-  def(objectRefImpl, REF_FLAG, true)
+  defineDataProperty(objectRefImpl, REF_FLAG, true)
 
   return objectRefImpl
 }

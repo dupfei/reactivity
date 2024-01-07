@@ -1,15 +1,23 @@
+import { Dep, createDep } from './dep'
+import { DebuggerOptions, ReactiveEffect, track, trigger } from './effect'
 import {
-  createDep,
-  DebuggerOptions,
-  ReactiveEffect,
-  track,
-  trigger,
-} from './effect'
-import { COMPUTED_FLAG, DEP_FLAG, READONLY_FLAG, REF_FLAG } from './flag'
+  COMPUTED_FLAG,
+  DEP_FLAG,
+  DirtyLevels,
+  READONLY_FLAG,
+  REF_FLAG,
+} from './flag'
 import { Ref } from './ref'
-import { def, isFunction, NOOP } from './utils/index'
+import {
+  NOOP,
+  defineAccessorProperty,
+  defineDataProperty,
+  isFunction,
+  sameValue,
+} from './utils/index'
+import { warn } from './utils/warn'
 
-type ComputedGetter<T> = () => T
+type ComputedGetter<T> = (oldValue?: T) => T
 type ComputedSetter<T> = (newValue: T) => void
 
 interface WritableComputedOptions<T> {
@@ -59,31 +67,32 @@ function createComputedRef<T>(
   setter?: ComputedSetter<T>,
   debuggerOptions?: DebuggerOptions,
 ): ComputedRef<T> {
-  const isReadonly = !setter
-  if (isReadonly) {
+  const readonly = !setter
+  if (readonly) {
     setter = __DEV__
       ? () => {
-          console.warn('[Reactivity] Computed value is readonly.')
+          warn('Computed value is readonly.')
         }
       : NOOP
   }
 
   let value: T
-  let dirty = true
-  const dep = createDep()
+  let dep: Dep | null = null
 
-  const effect = new ReactiveEffect(getter, () => {
-    if (!dirty) {
-      dirty = true
-      trigger(
-        dep,
-        __DEV__
-          ? { type: 'set', target: computedRef, key: 'value' }
-          : undefined,
-      )
-    }
-  })
-  effect.computed = true
+  const effect = new ReactiveEffect(
+    () => getter(value),
+    () => {
+      if (dep) {
+        trigger(
+          dep,
+          DirtyLevels.ComputedValueMaybeDirty,
+          __DEV__
+            ? { type: 'set', target: computedRef, key: 'value' }
+            : undefined,
+        )
+      }
+    },
+  )
 
   if (__DEV__ && debuggerOptions) {
     effect.onTrack = debuggerOptions.onTrack
@@ -93,14 +102,19 @@ function createComputedRef<T>(
   const computedRef: ComputedRef<T> = {
     get value() {
       track(
-        dep,
+        dep || (dep = createDep(() => (dep = null), computedRef)),
         __DEV__
           ? { type: 'get', target: computedRef, key: 'value' }
           : undefined,
       )
-      if (dirty) {
-        dirty = false
-        value = effect.run()
+      if (effect.dirty && !sameValue(value, (value = effect.run())) && dep) {
+        trigger(
+          dep,
+          DirtyLevels.ComputedValueDirty,
+          __DEV__
+            ? { type: 'set', target: computedRef, key: 'value' }
+            : undefined,
+        )
       }
       return value
     },
@@ -108,12 +122,14 @@ function createComputedRef<T>(
       setter!(newValue)
     },
   }
-  def(computedRef, REF_FLAG, true)
-  def(computedRef, COMPUTED_FLAG, true)
-  def(computedRef, DEP_FLAG, dep)
-  if (isReadonly) {
-    def(computedRef, READONLY_FLAG, true)
+  defineDataProperty(computedRef, REF_FLAG, true)
+  defineDataProperty(computedRef, COMPUTED_FLAG, true)
+  defineAccessorProperty(computedRef, DEP_FLAG, () => dep)
+  if (readonly) {
+    defineDataProperty(computedRef, READONLY_FLAG, true)
   }
+
+  effect.computed = computedRef
 
   return computedRef
 }

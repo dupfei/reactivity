@@ -5,8 +5,10 @@ const UA = inBrowser && window.navigator.userAgent.toLowerCase()
 const isIOS = UA && /iphone|ipad|ipod|ios/.test(UA)
 const isIE = UA && /msie|trident/.test(UA)
 
-let pendingCallbacks: (() => void)[] = []
-let flushingCallbacks: (() => void)[] = []
+type Callback = () => void
+
+let pendingCallbacks: Callback[] = []
+let flushingCallbacks: Callback[] = []
 let pending = false
 
 function flushCallbacks(): void {
@@ -14,7 +16,7 @@ function flushCallbacks(): void {
   const temp = flushingCallbacks
   flushingCallbacks = pendingCallbacks
   pendingCallbacks = temp
-  for (let i = 0; i < flushingCallbacks.length; i++) {
+  for (let i = 0, len = flushingCallbacks.length; i < len; i++) {
     flushingCallbacks[i]()
   }
   flushingCallbacks.length = 0
@@ -54,8 +56,8 @@ const timerFunc: () => void = (() => {
 })()
 
 export function nextTick(): Promise<void>
-export function nextTick(callback: () => void): void
-export function nextTick(callback?: () => void): Promise<void> | void {
+export function nextTick(callback: Callback): void
+export function nextTick(callback?: Callback): Promise<void> | void {
   let resolve: (() => void) | undefined
   pendingCallbacks.push(() => {
     if (callback) {
